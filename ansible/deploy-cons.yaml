@@ -1,0 +1,55 @@
+- name: 포드맨 컨테이너로 다 띄우기
+  hosts: repository
+  become: yes
+  vars:
+    MINIO_ACCESS_KEY: "minioadmin"
+    MINIO_SECRET_KEY: "minioadminpass"  # 임의로 설정함
+    GITEA_SSH_PORT: 2222
+    REGISTRY_PORT: 5000
+  tasks:
+    - name: 포드맨 설치하기
+      ansible.builtin.dnf:
+        name: podman
+        state: present
+
+    - name: 미니오 컨테이너 실행
+      containers.podman.podman_container:
+        name: minio
+        image: quay.io/minio/minio
+        state: started
+        restart_policy: always
+        ports:
+          - "9000:9000" 
+          - "9001:9001"
+        env:
+          MINIO_ROOT_USER: "{{ MINIO_ACCESS_KEY }}"
+          MINIO_ROOT_PASSWORD: "{{ MINIO_SECRET_KEY }}"
+        volume:
+          - "/data/minio:/data:Z" 
+        command: server /data --address :9000 --console-address :9001
+
+    - name: 도커 레지 컨테이너 실행
+      containers.podman.podman_container:
+        name: registry
+        image: registry:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "{{ REGISTRY_PORT }}:5000"
+        volume:
+          - "/data/registry:/var/lib/registry:Z" 
+
+    - name: 깃티 컨테이너 실행
+      containers.podman.podman_container:
+        name: gitea
+        image: docker.io/gitea/gitea:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "3000:3000"
+          - "{{ GITEA_SSH_PORT }}:22" 
+        volume:
+          - "/data/gitea:/data:Z" 
+        env:
+          USER_UID: '1000'
+          USER_GID: '1000'

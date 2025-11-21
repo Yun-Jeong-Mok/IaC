@@ -1,0 +1,28 @@
+[all:vars]
+ansible_user=rocky 
+ansible_ssh_private_key_file=/root/.ssh/id_ed25519_k8s
+ansible_python_interpreter=/usr/bin/python3
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+
+[k8s_cluster:children]
+control
+worker
+haproxy
+
+[haproxy]
+proxy ansible_host=10.0.1.50
+
+[control]
+control1 ansible_host=10.0.4.241
+control2 ansible_host=10.0.5.22
+control3 ansible_host=10.0.2.133
+
+[worker]
+worker1 ansible_host=10.0.3.249
+worker2 ansible_host=10.0.5.69
+worker3 ansible_host=10.0.3.165
+worker4 ansible_host=10.0.3.6
+worker5 ansible_host=10.0.5.126
+
+[repo]
+repository ansible_host=10.0.5.167

@@ -1,0 +1,103 @@
+- name: Kubeadm, Kubelet, Kubectl 설치 및 설정
+  hosts: k8s_cluster, haproxy
+  become: yes
+  vars:
+    kubernetes_version: "1.32" 
+    crio_version: "1.32"
+
+  tasks:
+    - name: SWAP 비활성화 및 영구 설정 
+      ansible.builtin.shell: swapoff -a && sed -i '/ swap / s/^/#/' /etc/fstab
+      changed_when: true
+      
+    - name: sysctl을 통해 IP 포워딩 활성화 및 파일 생성
+      ansible.builtin.copy:
+        content: |
+          net.ipv4.ip_forward=1
+        dest: /etc/sysctl.d/01-ip_forward.conf
+        mode: '0644'
+        
+    - name: br_netfilter 모듈 로드 설정
+      ansible.builtin.copy:
+        content: |
+          br_netfilter
+        dest: /etc/modules-load.d/01-br_netfilter.conf
+        mode: '0644'
+
+    - name: br_netfilter 모듈 로드 및 sysctl 적용
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - modprobe br_netfilter
+        - sysctl -w net.ipv4.ip_forward=1
+      changed_when: true
+
+    - name: SELinux 비활성화 
+      ansible.posix.selinux:
+        state: disabled
+        
+    - name: Firewalld 비활성화 및 중지
+      ansible.builtin.service:
+        name: firewalld
+        state: stopped
+        enabled: false
+        
+    - name: 쿠버 저장소 추가하기
+      ansible.builtin.copy:
+        content: |
+          [kubernetes]
+          name=Kubernetes
+          baseurl=https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/rpm/
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/rpm/repodata/repomd.xml.key
+        dest: /etc/yum.repos.d/kubernetes.repo
+
+
+    - name: Control Plane 및 Worker 노드에 Kubelet/Kubeadm 설치
+      ansible.builtin.dnf:
+        name:
+          - kubelet
+          - kubeadm
+        state: present
+        disable_excludes: kubernetes
+      when: inventory_hostname in groups['control'] or inventory_hostname in groups['worker']
+
+    - name: control 이랑 haproxy에 Kubectl 설치 (관리용)
+      ansible.builtin.dnf:
+        name:
+          - kubectl
+        state: present
+        disable_excludes: kubernetes
+      when: inventory_hostname in groups['control'] or inventory_hostname in groups['haproxy']
+
+    - name: Kubelet 서비스 활성화 (Worker 랑 Control 노드만)
+      ansible.builtin.service:
+        name: kubelet
+        state: started
+        enabled: yes
+      when: inventory_hostname in groups['control'] or inventory_hostname in groups['worker']
+
+    - name: CRIO 저장소 추가
+      ansible.builtin.copy:
+        content: |
+          [crio]
+          name=CRI-O
+          baseurl=https://pkgs.k8s.io/addons:/cri-o:/stable:/v{{ crio_version }}/rpm/
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://pkgs.k8s.io/addons:/cri-o:/stable:/v{{ crio_version }}/rpm/repodata/repomd.xml.key
+        dest: /etc/yum.repos.d/crio.repo
+      when: inventory_hostname in groups['control'] or inventory_hostname in groups['worker']
+
+    - name: CRIO 설치
+      ansible.builtin.dnf:
+        name: cri-o
+        state: present
+      when: inventory_hostname in groups['control'] or inventory_hostname in groups['worker']
+        
+    - name: CRIO 실행 중인지 확인
+      ansible.builtin.service:
+        name: crio
+        state: started
+        enabled: yes
+      when: inventory_hostname in groups['control'] or inventory_hostname in groups['worker']

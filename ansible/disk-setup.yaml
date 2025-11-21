@@ -1,0 +1,81 @@
+- name: 디스크 파티션 및 포맷/마운트 설정
+  hosts: repository
+  become: yes
+  tasks:
+
+    - name: 필요한 패키지 설치 (parted)
+      ansible.builtin.dnf:
+        name: parted
+        state: present
+
+    - name: MinIO용 디스크 파티션 작업 하기
+      community.general.parted:
+        device: /dev/vdb
+        number: 1
+        state: present
+        fs_type: xfs
+        part_end: 100%
+    - name: MinIO 포맷 작업 하기
+      ansible.builtin.filesystem:
+        fstype: xfs
+        dev: /dev/vdb1
+    - name: MinIO 마운트 지점 만들기 (/data/minio)
+      ansible.builtin.file:
+        path: /data/minio  
+        state: directory
+        mode: "0755"
+    - name: MinIO 마운트 하기
+      ansible.posix.mount:
+        path: /data/minio
+        src: /dev/vdb1
+        fstype: xfs
+        state: mounted
+        opts: defaults,nofail
+
+    - name: 깃티  디스크 파티션 하기
+      community.general.parted:
+        device: /dev/vdc
+        number: 1
+        state: present
+        fs_type: xfs
+        part_end: 100%
+    - name: 깃티  포맷 작업 하기
+      ansible.builtin.filesystem:
+        fstype: xfs
+        dev: /dev/vdc1
+    - name: 깃티 마운트 지점 만들기 (/data/gitea)
+      ansible.builtin.file:
+        path: /data/gitea
+        state: directory
+        mode: '0755'
+    - name: 깃티 마운트 하기
+      ansible.posix.mount:
+        path: /data/gitea
+        src: /dev/vdc1
+        fstype: xfs
+        state: mounted
+        opts: defaults,nofail
+
+    - name: 도커 레지 디스크 파티션 하기
+      community.general.parted:
+        device: /dev/vdd
+        number: 1
+        state: present
+        fs_type: xfs
+        part_end: 100%
+    - name: 도커 레지 포맷 작업 하기
+      ansible.builtin.filesystem:
+        fstype: xfs
+        dev: /dev/vdd1
+    - name: 도커 레지 마운트 지점 만들기 (/data/registry)
+      ansible.builtin.file:
+        path: /data/registry  
+        state: directory
+        mode: '0755'
+    - name: 깃티 마운트 하기
+      ansible.posix.mount:
+        path: /data/registry
+        src: /dev/vdd1
+        fstype: xfs
+        state: mounted
+        opts: defaults,nofail

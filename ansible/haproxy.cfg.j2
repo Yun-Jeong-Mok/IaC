@@ -1,0 +1,25 @@
+global
+  log 127.0.0.1 local2
+  chroot /var/lib/haproxy
+  pidfile /var/run/haproxy.pid
+  maxconn 4000
+  user haproxy
+  group haproxy
+  daemon
+
+defaults
+  mode tcp 
+  log global
+  timeout connect 5000
+  timeout client 50000
+  timeout server 50000
+
+listen kube-apiserver
+  bind {{ control_plane_ip }}:6443 
+  mode tcp
+  option tcplog
+  balance roundrobin
+  
+  {% for ip in control_node_ips %}
+  server control{{ loop.index }} {{ ip }}:6443 check
+  {% endfor %}
